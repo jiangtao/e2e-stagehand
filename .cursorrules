@@ -1,0 +1,503 @@
+# Stagehand for Electron - 开发规范
+
+## 项目概述
+这是一个基于 Next.js 的 AI 浏览器自动化服务，专门用于 Electron 应用的自动化测试和操作。
+
+## 技术栈规范
+
+### 核心技术
+- **前端框架**: Next.js 14.x (App Router)
+- **UI 库**: React 18.x + TypeScript
+- **样式系统**: Tailwind CSS + 自定义 CSS
+- **状态管理**: React Context API + WebSocket
+- **自动化引擎**: Stagehand 3.x
+- **协议通信**: Chrome DevTools Protocol (CDP)
+- **实时通信**: WebSocket
+
+### 架构设计
+- **三栏布局**: 左侧导航(240px) + 中间内容区 + 右侧预览(400px)
+- **路由系统**: 使用 Next.js App Router，支持页面状态保持
+- **组件化**: 模块化组件设计，职责单一
+- **状态共享**: 全局 Context 管理 WebSocket 连接和实例状态
+
+## 代码规范
+
+### 文件结构
+```
+src/
+├── app/                    # Next.js App Router 页面
+│   ├── instances/         # 实例管理页面
+│   ├── tasks/            # 任务执行页面
+│   ├── monitor/          # 监控分析页面
+│   ├── settings/         # 系统设置页面
+│   ├── api/              # API 路由
+│   └── layout.tsx        # 根布局
+├── components/           # 可复用组件
+├── lib/                 # 核心逻辑库
+│   ├── cdp/            # CDP 连接管理
+│   ├── stagehand/      # Stagehand 适配器
+│   ├── websocket/      # WebSocket 通信
+│   └── playback/       # 任务回放系统
+├── contexts/           # React Context
+└── types/             # TypeScript 类型定义
+```
+
+### 命名规范
+- **文件名**: kebab-case (例: `electron-connector.ts`)
+- **组件名**: PascalCase (例: `InstanceManager`)
+- **函数名**: camelCase (例: `connectToElectron`)
+- **常量名**: UPPER_SNAKE_CASE (例: `DEFAULT_PORT`)
+- **类型名**: PascalCase (例: `ElectronInstance`)
+
+### 组件开发规范
+
+#### React 组件
+```typescript
+'use client'; // 客户端组件必须声明
+
+import { useState, useEffect } from 'react';
+import { ComponentProps } from '@/types';
+
+interface ComponentNameProps {
+  // 明确的 props 类型定义
+  required: string;
+  optional?: number;
+}
+
+export default function ComponentName({ required, optional }: ComponentNameProps) {
+  // 组件逻辑
+  return (
+    <div className="component-container">
+      {/* JSX 内容 */}
+    </div>
+  );
+}
+```
+
+#### API 路由
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  try {
+    // API 逻辑
+    return NextResponse.json({ success: true, data: result });
+  } catch (error) {
+    console.error('API Error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### 样式规范
+
+#### Tailwind CSS 使用
+- **优先使用 Tailwind 类**: 避免自定义 CSS，除非必要
+- **响应式设计**: 使用 `sm:`, `md:`, `lg:` 前缀
+- **深色主题**: 使用 `dark:` 前缀支持深色模式
+- **自定义组件类**: 在 `globals.css` 中定义复用样式
+
+#### 自定义样式类
+```css
+/* 卡片组件 */
+.card {
+  @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 backdrop-blur-sm;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* 按钮组件 */
+.btn-primary {
+  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-2.5 px-6 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5;
+}
+```
+
+### TypeScript 规范
+
+#### 类型定义
+```typescript
+// 明确的接口定义
+export interface ElectronInstance {
+  id: string;
+  port: number;
+  status: 'connected' | 'disconnected' | 'error';
+  connectedAt: Date;
+  lastActivity: Date;
+}
+
+// 操作事件类型
+export interface OperationEvent {
+  type: 'click' | 'type' | 'scroll' | 'navigate' | 'extract' | 'observe';
+  timestamp: Date;
+  instanceId: string;
+  target?: {
+    selector?: string;
+    coordinates?: { x: number; y: number };
+    text?: string;
+  };
+  result?: any;
+}
+```
+
+#### 错误处理
+```typescript
+try {
+  const result = await riskyOperation();
+  return result;
+} catch (error) {
+  console.error('Operation failed:', error);
+  throw new Error(`Failed to perform operation: ${error.message}`);
+}
+```
+
+## 功能开发规范
+
+### WebSocket 通信
+- **连接管理**: 使用 Context 管理全局连接状态
+- **消息格式**: 统一的消息结构，包含 type、data、timestamp
+- **错误处理**: 自动重连机制，错误状态显示
+- **状态同步**: 实时同步实例状态和操作事件
+
+### CDP 集成
+- **连接池管理**: 支持多个 Electron 实例同时连接
+- **健康检查**: 定期检查连接状态，自动清理无效连接
+- **事件监听**: 监听页面加载、导航等关键事件
+- **错误恢复**: 连接断开时的自动重连机制
+
+### Canvas 绘制
+- **实时更新**: 基于 WebSocket 事件实时更新画布
+- **操作标注**: 不同操作类型使用不同颜色和形状标注
+- **背景支持**: 支持截图背景叠加操作轨迹
+- **性能优化**: 限制显示的操作数量，避免性能问题
+
+### 任务回放系统
+- **录制格式**: JSON 格式存储，包含完整操作序列
+- **文件管理**: 本地文件存储，支持导入导出
+- **回放控制**: 支持播放、暂停、步进、速度调节
+- **可视化**: 在 Canvas 上重现操作轨迹
+
+## 性能优化规范
+
+### 前端优化
+- **懒加载**: 大型组件使用 React.lazy 懒加载
+- **内存管理**: 及时清理事件监听器和定时器
+- **状态优化**: 避免不必要的重渲染，使用 useMemo 和 useCallback
+- **图片优化**: 使用 Next.js Image 组件优化图片加载
+
+### 后端优化
+- **连接池**: 复用 CDP 连接，避免频繁创建销毁
+- **缓存策略**: 缓存实例状态，减少重复查询
+- **错误边界**: 实现错误边界，防止单个错误影响整体服务
+- **资源清理**: 及时清理无用资源，防止内存泄漏
+
+## 测试规范
+
+### 单元测试
+- **组件测试**: 使用 React Testing Library 测试组件
+- **API 测试**: 测试 API 路由的各种场景
+- **工具函数测试**: 测试核心逻辑函数
+
+### 集成测试
+- **端到端测试**: 测试完整的用户操作流程
+- **WebSocket 测试**: 测试实时通信功能
+- **CDP 集成测试**: 测试与 Electron 的连接和操作
+
+## 部署规范
+
+### 构建配置
+- **Next.js 配置**: 正确配置外部包和实验性功能
+- **TypeScript 配置**: 启用严格模式，配置路径映射
+- **环境变量**: 使用 .env.local 管理敏感配置
+
+### 错误处理
+- **构建错误**: 修复 TypeScript 类型错误和依赖问题
+- **运行时错误**: 实现全局错误处理和用户友好的错误提示
+- **网络错误**: 处理 WebSocket 连接失败和 CDP 连接异常
+
+## 开发工作流
+
+### 验证和测试流程
+- **代码验证**: 每次提交前必须通过所有验证步骤
+- **构建测试**: 确保 `npm run build` 成功执行
+- **类型检查**: 运行 `npm run type-check` 验证 TypeScript 类型
+- **代码风格**: 运行 `npm run lint` 检查代码规范
+- **功能测试**: 验证核心功能正常工作
+- **API 测试**: 确保所有 API 端点响应正常
+
+### 提交前检查清单
+```bash
+# 1. 构建验证
+npm run build
+
+# 2. 类型检查
+npm run type-check
+
+# 3. 代码规范检查
+npm run lint
+
+# 4. 启动服务测试
+npm start
+
+# 5. API 功能验证
+curl -s http://localhost:3000/api/instances
+curl -s http://localhost:3000/api/config
+
+# 6. CLI 工具测试
+npm run stagehand-electron -- --help
+node dist/index.js status
+```
+
+### Git Flow 规范
+
+#### 分支管理
+- **main**: 主分支，保持稳定可发布状态
+- **develop**: 开发分支，集成最新功能
+- **feature/***: 功能分支，从 develop 分出
+- **hotfix/***: 热修复分支，从 main 分出
+- **release/***: 发布分支，准备发布版本
+
+#### 分支命名规范
+```bash
+# 功能分支
+feature/ui-layout-redesign
+feature/task-playback-system
+feature/canvas-enhancement
+
+# 修复分支
+hotfix/websocket-connection-fix
+hotfix/build-error-fix
+
+# 发布分支
+release/v1.1.0
+release/v1.2.0
+```
+
+#### 提交信息规范 (Conventional Commits)
+```bash
+# 格式: <type>(<scope>): <description>
+# 
+# <body>
+# 
+# <footer>
+
+# 示例:
+feat(ui): 重构界面布局为 Mobile-Agent-v3 风格
+
+- 🎨 实现三栏布局：左侧导航 + 中间内容 + 右侧预览
+- 🚀 添加 Next.js 路由系统，支持页面状态保持
+- 📱 创建四个主要页面：实例管理、任务执行、监控分析、系统设置
+
+Closes #123
+
+fix(api): 修复 WebSocket 连接断开问题
+
+- 添加自动重连机制
+- 优化错误处理逻辑
+- 改进连接状态显示
+
+Fixes #456
+```
+
+#### 提交类型 (Type)
+- **feat**: 新功能 (feature)
+- **fix**: 修复问题 (bug fix)
+- **docs**: 文档更新 (documentation)
+- **style**: 代码格式调整 (formatting, missing semi colons, etc)
+- **refactor**: 代码重构 (refactoring production code)
+- **test**: 测试相关 (adding missing tests, refactoring tests)
+- **chore**: 构建配置、依赖更新等 (updating grunt tasks etc)
+- **perf**: 性能优化 (performance improvements)
+- **ci**: CI/CD 配置 (continuous integration)
+- **build**: 构建系统或外部依赖变更 (build system changes)
+- **revert**: 回滚提交 (reverting changes)
+
+#### 作用域 (Scope) - 可选
+- **ui**: 用户界面相关
+- **api**: API 接口相关
+- **websocket**: WebSocket 通信
+- **canvas**: Canvas 绘制功能
+- **playback**: 任务回放系统
+- **cdp**: CDP 连接管理
+- **config**: 配置管理
+- **cli**: 命令行工具
+- **docs**: 文档相关
+
+### 完整开发流程
+
+#### 1. 功能开发流程
+```bash
+# 1. 从 develop 创建功能分支
+git checkout develop
+git pull origin develop
+git checkout -b feature/new-feature
+
+# 2. 开发功能
+# ... 编写代码 ...
+
+# 3. 验证代码
+npm run build
+npm run type-check
+npm run lint
+npm start  # 测试功能
+
+# 4. 提交代码
+git add .
+git commit -m "feat(scope): 功能描述
+
+详细说明功能实现
+- 关键变更点1
+- 关键变更点2
+
+Closes #issue-number"
+
+# 5. 推送分支
+git push origin feature/new-feature
+
+# 6. 创建 Pull Request 到 develop
+# 7. 代码审查通过后合并
+# 8. 删除功能分支
+git branch -d feature/new-feature
+```
+
+#### 2. 热修复流程
+```bash
+# 1. 从 main 创建热修复分支
+git checkout main
+git pull origin main
+git checkout -b hotfix/critical-fix
+
+# 2. 修复问题
+# ... 修复代码 ...
+
+# 3. 验证修复
+npm run build
+npm run type-check
+npm run lint
+# 重点测试修复的问题
+
+# 4. 提交修复
+git add .
+git commit -m "fix(scope): 修复关键问题
+
+详细说明修复内容
+- 问题原因分析
+- 修复方案说明
+
+Fixes #issue-number"
+
+# 5. 合并到 main 和 develop
+git checkout main
+git merge hotfix/critical-fix
+git checkout develop
+git merge hotfix/critical-fix
+
+# 6. 打标签发布
+git tag -a v1.0.1 -m "Release v1.0.1: 修复关键问题"
+git push origin main develop --tags
+```
+
+#### 3. 发布流程
+```bash
+# 1. 从 develop 创建发布分支
+git checkout develop
+git pull origin develop
+git checkout -b release/v1.1.0
+
+# 2. 准备发布
+# 更新版本号、文档等
+npm version minor  # 或 major/patch
+
+# 3. 最终验证
+npm run build
+npm run type-check
+npm run lint
+npm start
+# 完整功能测试
+
+# 4. 提交发布准备
+git add .
+git commit -m "chore(release): 准备发布 v1.1.0
+
+- 更新版本号
+- 更新文档
+- 最终测试通过"
+
+# 5. 合并到 main
+git checkout main
+git merge release/v1.1.0
+
+# 6. 打标签
+git tag -a v1.1.0 -m "Release v1.1.0: 新功能发布"
+
+# 7. 合并回 develop
+git checkout develop
+git merge release/v1.1.0
+
+# 8. 推送所有更改
+git push origin main develop --tags
+
+# 9. 删除发布分支
+git branch -d release/v1.1.0
+```
+
+### 代码审查规范
+- **功能完整性**: 确保功能按需求实现
+- **类型安全**: 确保 TypeScript 类型正确
+- **性能考虑**: 检查是否有性能问题
+- **错误处理**: 确保有适当的错误处理
+- **代码风格**: 遵循项目代码风格规范
+- **测试覆盖**: 确保关键功能有测试覆盖
+- **文档更新**: 重要变更需要更新文档
+
+### 持续集成检查
+- **自动构建**: 每次 PR 自动触发构建
+- **类型检查**: 自动运行 TypeScript 类型检查
+- **代码规范**: 自动运行 ESLint 检查
+- **测试执行**: 自动运行单元测试和集成测试
+- **部署验证**: 自动部署到测试环境验证
+
+## 调试规范
+
+### 开发调试
+- **控制台日志**: 使用有意义的日志信息
+- **错误追踪**: 记录错误堆栈和上下文信息
+- **状态检查**: 提供状态检查和诊断工具
+
+### 生产调试
+- **错误监控**: 实现错误监控和报告
+- **性能监控**: 监控关键性能指标
+- **日志管理**: 结构化日志输出和管理
+
+## 安全规范
+
+### 数据安全
+- **输入验证**: 验证所有用户输入
+- **权限控制**: 实现适当的权限检查
+- **敏感信息**: 避免在客户端暴露敏感信息
+
+### 网络安全
+- **CORS 配置**: 正确配置跨域访问
+- **WebSocket 安全**: 实现 WebSocket 连接验证
+- **API 安全**: 实现 API 访问控制和限流
+
+## 最佳实践
+
+### 代码质量
+- **单一职责**: 每个函数和组件只做一件事
+- **可读性**: 使用清晰的变量名和注释
+- **可维护性**: 避免深层嵌套和复杂逻辑
+- **可测试性**: 编写易于测试的代码
+
+### 用户体验
+- **响应式设计**: 适配不同屏幕尺寸
+- **加载状态**: 显示加载和错误状态
+- **交互反馈**: 提供及时的用户反馈
+- **无障碍性**: 考虑无障碍访问需求
+
+### 开发效率
+- **组件复用**: 创建可复用的组件库
+- **工具函数**: 提取通用工具函数
+- **类型定义**: 完善的 TypeScript 类型定义
+- **开发工具**: 使用合适的开发和调试工具
