@@ -1,0 +1,302 @@
+# Stagehand for Electron - .gitignore
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =============================================================================
+# Next.js
+# =============================================================================
+/.next/
+/out/
+next-env.d.ts
+
+# Production build
+/build/
+/dist/
+
+# =============================================================================
+# Environment Variables & Configuration
+# =============================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local configuration files
+config.local.json
+electron-config.local.json
+
+# =============================================================================
+# Runtime & Logs
+# =============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =============================================================================
+# TypeScript
+# =============================================================================
+*.tsbuildinfo
+.tsbuildinfo
+
+# =============================================================================
+# Testing
+# =============================================================================
+/coverage/
+/.nyc_output/
+junit.xml
+
+# Jest
+/coverage/
+/.jest/
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# =============================================================================
+# IDE & Editor
+# =============================================================================
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+.idea/
+*.swp
+*.swo
+*~
+
+# Cursor AI
+.cursor/
+!.cursor/commands/
+
+# =============================================================================
+# OS Generated Files
+# =============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# =============================================================================
+# Application Specific
+# =============================================================================
+# Task files and uploads
+/tasks/
+/uploads/
+/temp/
+
+# Screenshots and recordings
+/screenshots/
+/recordings/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.webm
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.gif
+
+# Stagehand cache and temporary files
+.stagehand/
+.stagehand-cache/
+
+# Electron specific
+/app/dist/
+/release/
+/packages/
+
+# CDP debug files
+cdp-*.json
+debug-*.log
+
+# =============================================================================
+# Security & Sensitive Data
+# =============================================================================
+# API keys and secrets
+.secrets
+secrets.json
+api-keys.json
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# Backup & Temporary Files
+# =============================================================================
+*.bak
+*.backup
+*.tmp
+*.temp
+*~
+.#*
+#*#
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# =============================================================================
+# Package Managers
+# =============================================================================
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# npm
+package-lock.json
+.npm/
+
+# pnpm
+pnpm-lock.yaml
+
+# =============================================================================
+# Monitoring & Analytics
+# =============================================================================
+# Vercel
+.vercel
+
+# Sentry
+.sentryclirc
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# Stylelint cache
+.stylelintcache
+
+# TypeScript incremental compilation
+*.tsbuildinfo
+
+# =============================================================================
+# Docker
+# =============================================================================
+Dockerfile.local
+docker-compose.override.yml
+.dockerignore.local
+
+# =============================================================================
+# CI/CD
+# =============================================================================
+# GitHub Actions
+.github/workflows/*.local.yml
+
+# Local CI scripts
+ci-local.sh
+deploy-local.sh
+
+# =============================================================================
+# Documentation Build
+# =============================================================================
+/docs/build/
+/docs/.docusaurus/
+/docs/node_modules/
+
+# =============================================================================
+# Performance & Profiling
+# =============================================================================
+# Chrome profiling
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+
+# Node.js profiling
+isolate-*-v8.log
+v8.log
+
+# =============================================================================
+# Custom Application Files
+# =============================================================================
+# User uploaded task files (keep samples)
+/user-tasks/
+/custom-tasks/
+!/samples/
+
+# Instance connection history
+connections.json
+instances.json
+
+# Operation logs and history
+operations-*.json
+logs-*.json
+
+# Configuration backups
+config-backup-*.json
+
+# WebSocket connection logs
+ws-*.log
+
+# Performance metrics
+metrics-*.json
+performance-*.log
+
+# =============================================================================
+# Future Extensions
+# =============================================================================
+# Plugin directories
+/plugins/local/
+/extensions/local/
+
+# Custom themes
+/themes/custom/
+
+# User scripts
+/scripts/user/
