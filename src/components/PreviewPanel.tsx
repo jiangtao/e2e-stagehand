@@ -31,7 +31,7 @@ export default function PreviewPanel() {
 
   return (
     <div className={`flex flex-col h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 transition-all duration-300 ${
-      isExpanded ? 'w-96' : 'w-12'
+      isExpanded ? 'w-full' : 'w-12'
     }`}>
       {/* 头部控制栏 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">

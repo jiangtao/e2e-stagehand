@@ -314,8 +314,8 @@ export default function OperationCanvas({
     <div className="space-y-4">
       <canvas
         ref={canvasRef}
-        width={400}
-        height={200}
+        width={800}
+        height={400}
         className="operation-canvas w-full"
       />
       

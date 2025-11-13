@@ -53,13 +53,15 @@ export default function RootLayout({
               
               {/* 主内容区 */}
               <div className="flex-1 flex min-h-0">
-                {/* 中间内容区 */}
-                <main className="flex-1 p-6 overflow-auto">
+                {/* 中间内容区 - 50% 宽度 */}
+                <main className="w-1/2 p-6 overflow-auto">
                   {children}
                 </main>
                 
-                {/* 右侧预览面板 */}
-                <PreviewPanel />
+                {/* 右侧预览面板 - 50% 宽度 */}
+                <div className="w-1/2">
+                  <PreviewPanel />
+                </div>
               </div>
             </div>
           </div>
