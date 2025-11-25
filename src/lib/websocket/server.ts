@@ -2,6 +2,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { electronConnector } from '@/lib/cdp/electron-connector';
 import { WebSocketMessage, OperationEvent } from '@/types';
+import { agentManager } from '@/lib/agent/agent-manager';
+import { getUserId } from '@/lib/middleware/user-id';
 
 export class StagehandWebSocketServer {
   private wss: WebSocketServer | null = null;
@@ -18,42 +20,55 @@ export class StagehandWebSocketServer {
     this.wss = new WebSocketServer({ port });
 
     this.wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
-      console.log(`🔌 WebSocket client connected from ${request.socket.remoteAddress}`);
+      const remoteAddress = request.socket.remoteAddress;
+      console.log(`🔌 WebSocket client connected from ${remoteAddress}`);
       
-      this.clients.add(ws);
+      // 检查是否是代理客户端连接
+      const agentId = request.headers['x-agent-id'] as string;
+      const userId = request.headers['x-user-id'] as string;
+      const agentToken = request.headers['x-agent-token'] as string;
 
-      // 发送当前连接的实例列表
-      this.sendToClient(ws, {
-        type: 'status',
-        data: {
-          instances: electronConnector.listInstances(),
-          message: 'Connected to Stagehand WebSocket server'
-        },
-        timestamp: new Date()
-      });
+      if (agentId && userId) {
+        // 这是代理客户端连接
+        console.log(`🤖 Agent client connected: ${agentId} (User: ${userId})`);
+        this.handleAgentConnection(ws, agentId, userId, agentToken);
+      } else {
+        // 这是普通 Web UI 客户端连接
+        this.clients.add(ws);
 
-      // 处理客户端消息
-      ws.on('message', (data: Buffer) => {
-        try {
-          const message = JSON.parse(data.toString());
-          this.handleClientMessage(ws, message);
-        } catch (error) {
-          console.error('❌ Error parsing WebSocket message:', error);
-          this.sendError(ws, 'Invalid message format');
-        }
-      });
+        // 发送当前连接的实例列表
+        this.sendToClient(ws, {
+          type: 'status',
+          data: {
+            instances: electronConnector.listInstances(),
+            message: 'Connected to Stagehand WebSocket server'
+          },
+          timestamp: new Date()
+        });
 
-      // 处理连接关闭
-      ws.on('close', () => {
-        console.log('🔌 WebSocket client disconnected');
-        this.clients.delete(ws);
-      });
+        // 处理客户端消息
+        ws.on('message', (data: Buffer) => {
+          try {
+            const message = JSON.parse(data.toString());
+            this.handleClientMessage(ws, message);
+          } catch (error) {
+            console.error('❌ Error parsing WebSocket message:', error);
+            this.sendError(ws, 'Invalid message format');
+          }
+        });
 
-      // 处理错误
-      ws.on('error', (error) => {
-        console.error('❌ WebSocket error:', error);
-        this.clients.delete(ws);
-      });
+        // 处理连接关闭
+        ws.on('close', () => {
+          console.log('🔌 WebSocket client disconnected');
+          this.clients.delete(ws);
+        });
+
+        // 处理错误
+        ws.on('error', (error) => {
+          console.error('❌ WebSocket error:', error);
+          this.clients.delete(ws);
+        });
+      }
     });
 
     console.log(`🚀 WebSocket server started on port ${port}`);
@@ -80,6 +95,7 @@ export class StagehandWebSocketServer {
       this.broadcast({
         type: 'status',
         data: {
+          instances: electronConnector.listInstances(),
           event: 'instance_connected',
           instance
         },
@@ -92,8 +108,34 @@ export class StagehandWebSocketServer {
       this.broadcast({
         type: 'status',
         data: {
+          instances: electronConnector.listInstances(),
           event: 'instance_disconnected',
           instanceId
+        },
+        timestamp: new Date()
+      });
+    });
+
+    // 监听代理客户端连接事件
+    agentManager.on('agent_connected', (agentId: string, userId: string) => {
+      this.broadcast({
+        type: 'status',
+        data: {
+          event: 'agent_connected',
+          agentId,
+          userId
+        },
+        timestamp: new Date()
+      });
+    });
+
+    // 监听代理客户端断开事件
+    agentManager.on('agent_disconnected', (agentId: string) => {
+      this.broadcast({
+        type: 'status',
+        data: {
+          event: 'agent_disconnected',
+          agentId
         },
         timestamp: new Date()
       });
@@ -150,6 +192,60 @@ export class StagehandWebSocketServer {
   }
 
   /**
+   * 处理代理客户端连接
+   */
+  private handleAgentConnection(ws: WebSocket, agentId: string, userId: string, token: string | undefined): void {
+    // 注册代理客户端
+    agentManager.registerAgent(agentId, userId, undefined, ws);
+
+    // 监听代理客户端消息（通过 agentManager 的事件）
+    agentManager.on('cdp_message', (message: any) => {
+      // 转发 CDP 响应和事件到所有 Web UI 客户端
+      this.broadcast(message);
+    });
+
+    agentManager.on('cdp_instance_connected', (instanceId: string, agentId: string) => {
+      // 通知所有客户端实例已连接
+      this.broadcast({
+        type: 'status',
+        data: {
+          instances: electronConnector.listInstances(),
+          event: 'instance_connected',
+          instanceId,
+          agentId
+        },
+        timestamp: new Date()
+      });
+    });
+
+    agentManager.on('cdp_instance_disconnected', (instanceId: string, agentId: string) => {
+      // 通知所有客户端实例已断开
+      this.broadcast({
+        type: 'status',
+        data: {
+          instances: electronConnector.listInstances(),
+          event: 'instance_disconnected',
+          instanceId,
+          agentId
+        },
+        timestamp: new Date()
+      });
+    });
+
+    agentManager.on('agent_disconnected', (agentId: string) => {
+      // 通知所有客户端代理已断开
+      this.broadcast({
+        type: 'status',
+        data: {
+          event: 'agent_disconnected',
+          agentId
+        },
+        timestamp: new Date()
+      });
+    });
+  }
+
+  /**
    * 处理客户端消息
    */
   private async handleClientMessage(ws: WebSocket, message: any): Promise<void> {
@@ -180,6 +276,24 @@ export class StagehandWebSocketServer {
               timestamp: new Date()
             });
           }
+          break;
+
+        case 'get_agents':
+          // 获取代理客户端列表（需要从请求中获取 userId）
+          // 这里简化处理，返回所有代理
+          this.sendToClient(ws, {
+            type: 'status',
+            data: {
+              agents: agentManager.getAllAgents().map(agent => ({
+                agentId: agent.agentId,
+                userId: agent.userId,
+                name: agent.name,
+                connectedAt: agent.connectedAt,
+                lastHeartbeat: agent.lastHeartbeat
+              }))
+            },
+            timestamp: new Date()
+          });
           break;
 
         case 'ping':

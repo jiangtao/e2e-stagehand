@@ -1,30 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { electronConnector } from '@/lib/cdp/electron-connector';
+import { getUserId, ensureUser, setUserIdCookie } from '@/lib/middleware/user-id';
 
 // 请求验证 schema
 const ConnectRequestSchema = z.object({
   port: z.number().min(1024).max(65535),
-  appPath: z.string().optional()
+  appPath: z.string().optional(),
+  agentId: z.string().optional(),
+  connectionType: z.enum(['local', 'remote']).optional().default('local')
 });
 
 export async function POST(request: NextRequest) {
   try {
+    // 获取或创建用户 ID
+    const userId = getUserId(request);
+    ensureUser(userId);
+
     const body = await request.json();
-    
-    // 验证请求数据
-    const { port, appPath } = ConnectRequestSchema.parse(body);
+    const { port, appPath, agentId, connectionType } = ConnectRequestSchema.parse(body);
 
-    // 尝试连接到 Electron 实例
-    const instanceId = await electronConnector.connect(port, appPath);
+    // 连接到 Electron 实例（传入 userId, agentId, connectionType）
+    const instanceId = await electronConnector.connect(port, appPath, userId, agentId, connectionType);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         instanceId,
         instance: electronConnector.getInstance(instanceId)
       }
     });
+
+    // 设置用户 ID Cookie
+    response.headers.set('Set-Cookie', setUserIdCookie(userId));
+
+    return response;
 
   } catch (error) {
     console.error('❌ Connect API error:', error);

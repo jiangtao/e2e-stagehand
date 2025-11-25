@@ -2,7 +2,11 @@
 # 这是一个基础的自动化测试示例
 
 # 导航到测试页面
-导航到 https://example.com
+导航到 https://www.baidu.com.com
+
+# 搜索
+
+搜索 ReactNative 相关的 App
 
 # 等待页面完全加载
 等待页面加载完成

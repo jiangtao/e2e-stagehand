@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// 任务存储 (应该与 upload API 共享)
-const tasks = new Map<string, any>();
+import { taskDB } from '@/lib/db/database';
+import { getUserId, ensureUser, setUserIdCookie } from '@/lib/middleware/user-id';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // 获取用户 ID
+    const userId = getUserId(request);
+    ensureUser(userId);
+
     const taskId = params.id;
 
-    // 查找任务
-    const task = tasks.get(taskId);
+    // 从数据库查找任务
+    const task = taskDB.findById(taskId);
     if (!task) {
       return NextResponse.json({
         success: false,
@@ -19,19 +22,32 @@ export async function GET(
       }, { status: 404 });
     }
 
-    return NextResponse.json({
+    // 检查任务是否属于当前用户
+    if (task.userId !== userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized access to task'
+      }, { status: 403 });
+    }
+
+    const response = NextResponse.json({
       success: true,
       data: {
         id: task.id,
         filename: task.filename,
         description: task.description,
         status: task.status,
-        createdAt: task.createdAt,
-        updatedAt: task.updatedAt,
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString(),
         result: task.result,
         error: task.error
       }
     });
+
+    // 设置用户 ID Cookie
+    response.headers.set('Set-Cookie', setUserIdCookie(userId));
+
+    return response;
 
   } catch (error) {
     console.error('❌ Task status API error:', error);
@@ -48,11 +64,15 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    // 获取用户 ID
+    const userId = getUserId(request);
+    ensureUser(userId);
+
     const taskId = params.id;
     const body = await request.json();
 
-    // 查找任务
-    const task = tasks.get(taskId);
+    // 从数据库查找任务
+    const task = taskDB.findById(taskId);
     if (!task) {
       return NextResponse.json({
         success: false,
@@ -60,23 +80,34 @@ export async function PUT(
       }, { status: 404 });
     }
 
+    // 检查任务是否属于当前用户
+    if (task.userId !== userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized access to task'
+      }, { status: 403 });
+    }
+
     // 更新任务状态
-    const updatedTask = {
-      ...task,
-      ...body,
-      updatedAt: new Date().toISOString()
-    };
+    const status = body.status || task.status;
+    const result = body.result || task.result;
+    const error = body.error || task.error;
 
-    tasks.set(taskId, updatedTask);
+    taskDB.updateStatus(taskId, status, result, error);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
-        id: updatedTask.id,
-        status: updatedTask.status,
-        updatedAt: updatedTask.updatedAt
+        id: taskId,
+        status,
+        updatedAt: new Date().toISOString()
       }
     });
+
+    // 设置用户 ID Cookie
+    response.headers.set('Set-Cookie', setUserIdCookie(userId));
+
+    return response;
 
   } catch (error) {
     console.error('❌ Update task status API error:', error);

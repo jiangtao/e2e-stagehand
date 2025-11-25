@@ -7,6 +7,7 @@ import { runCommand } from './commands/run';
 import { disconnectCommand } from './commands/disconnect';
 import { configCommand } from './commands/config';
 import { statusCommand } from './commands/status';
+import { agentCommand } from './commands/agent';
 
 const program = new Command();
 
@@ -65,6 +66,16 @@ program
   .description('Show service status')
   .option('-i, --instance <id>', 'Specific instance ID')
   .action(statusCommand);
+
+// 代理客户端命令
+program
+  .command('agent')
+  .description('Start agent client to connect local CDP instances to remote server')
+  .option('-s, --server <url>', 'Remote server WebSocket URL', 'ws://localhost:8080')
+  .option('-u, --user-id <id>', 'User ID (auto-generated if not provided)')
+  .option('-n, --name <name>', 'Agent name')
+  .option('-t, --token <token>', 'Agent token (optional)')
+  .action(agentCommand);
 
 // 解析命令行参数
 program.parse();

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import UserInfo from './UserInfo';
 import { useStagehandWebSocket } from '@/lib/websocket/client-hook';
 
 const navigation = [
@@ -10,6 +11,12 @@ const navigation = [
     href: '/instances',
     icon: '🔌',
     description: '连接和管理 Electron 实例'
+  },
+  {
+    name: '代理客户端',
+    href: '/agents',
+    icon: '🤖',
+    description: '管理代理客户端连接'
   },
   {
     name: '任务执行',
@@ -100,7 +107,8 @@ export default function Sidebar() {
       </nav>
 
       {/* 底部信息 */}
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+        <UserInfo />
         <div className="text-xs text-gray-500 dark:text-gray-400">
           <div className="flex justify-between items-center">
             <span>版本 1.0.0</span>

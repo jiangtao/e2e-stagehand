@@ -8,6 +8,11 @@ export interface ElectronInstance {
   status: 'connected' | 'disconnected' | 'error';
   connectedAt: Date;
   lastActivity: Date;
+  // 代理相关字段
+  agentId?: string;
+  connectionType?: 'local' | 'remote';
+  remoteHost?: string;
+  remotePort?: number;
 }
 
 export interface CDPCommand {
@@ -56,8 +61,10 @@ export interface OperationEvent {
 }
 
 export interface WebSocketMessage {
-  type: 'operation' | 'status' | 'error' | 'log';
+  type: 'operation' | 'status' | 'error' | 'log' | 'agent_connect' | 'agent_disconnect' | 'cdp_command' | 'cdp_response' | 'cdp_event' | 'cdp_connected' | 'cdp_disconnected' | 'heartbeat' | 'pong' | 'agent_register';
   instanceId?: string;
+  agentId?: string;
+  requestId?: string;
   data: any;
   timestamp: Date;
 }

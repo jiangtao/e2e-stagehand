@@ -300,3 +300,8 @@ performance-*.log
 
 # User scripts
 /scripts/user/
+
+# Stagehand database
+.stagehand/
+*.db
+*.db-journal

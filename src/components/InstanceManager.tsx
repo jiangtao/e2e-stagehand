@@ -19,7 +19,9 @@ export default function InstanceManager({
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectForm, setConnectForm] = useState({
     port: '9222',
-    appPath: ''
+    appPath: '',
+    agentId: '',
+    connectionType: 'local' as 'local' | 'remote'
   });
 
   const handleConnect = async () => {
@@ -33,7 +35,9 @@ export default function InstanceManager({
         },
         body: JSON.stringify({
           port: parseInt(connectForm.port),
-          appPath: connectForm.appPath || undefined
+          appPath: connectForm.appPath || undefined,
+          agentId: connectForm.agentId || undefined,
+          connectionType: connectForm.connectionType
         }),
       });
 
@@ -41,7 +45,7 @@ export default function InstanceManager({
 
       if (result.success) {
         onRefresh();
-        setConnectForm({ port: '9222', appPath: '' });
+        setConnectForm({ port: '9222', appPath: '', agentId: '', connectionType: 'local' });
         alert('✅ 连接成功！');
       } else {
         alert(`❌ 连接失败: ${result.error}`);
@@ -112,39 +116,75 @@ export default function InstanceManager({
           连接 Electron 实例
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              CDP 调试端口
+              连接类型
             </label>
-            <input
-              type="number"
-              value={connectForm.port}
-              onChange={(e) => setConnectForm({ ...connectForm, port: e.target.value })}
+            <select
+              value={connectForm.connectionType || 'local'}
+              onChange={(e) => setConnectForm({ ...connectForm, connectionType: e.target.value as 'local' | 'remote' })}
               className="input-field"
-              placeholder="9222"
-              min="1024"
-              max="65535"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Electron 应用的远程调试端口 (通常是 9222)
-            </p>
+            >
+              <option value="local">本地直连</option>
+              <option value="remote">远程代理</option>
+            </select>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              应用路径 (可选)
-            </label>
-            <input
-              type="text"
-              value={connectForm.appPath}
-              onChange={(e) => setConnectForm({ ...connectForm, appPath: e.target.value })}
-              className="input-field"
-              placeholder="/path/to/electron/app"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Electron 应用的可执行文件路径
-            </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                CDP 调试端口
+              </label>
+              <input
+                type="number"
+                value={connectForm.port}
+                onChange={(e) => setConnectForm({ ...connectForm, port: e.target.value })}
+                className="input-field"
+                placeholder="9222"
+                min="1024"
+                max="65535"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Electron 应用的远程调试端口 (通常是 9222)
+              </p>
+            </div>
+            
+            {connectForm.connectionType === 'remote' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  代理客户端 ID (可选)
+                </label>
+                <input
+                  type="text"
+                  value={connectForm.agentId || ''}
+                  onChange={(e) => setConnectForm({ ...connectForm, agentId: e.target.value })}
+                  className="input-field"
+                  placeholder="agent-xxx"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  如果为空，将使用第一个可用的代理客户端
+                </p>
+              </div>
+            )}
+
+            {connectForm.connectionType === 'local' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  应用路径 (可选)
+                </label>
+                <input
+                  type="text"
+                  value={connectForm.appPath}
+                  onChange={(e) => setConnectForm({ ...connectForm, appPath: e.target.value })}
+                  className="input-field"
+                  placeholder="/path/to/electron/app"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Electron 应用的可执行文件路径
+                </p>
+              </div>
+            )}
           </div>
         </div>
         

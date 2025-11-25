@@ -106,6 +106,10 @@ export function useStagehandWebSocket(options: UseWebSocketOptions = {}) {
             instances: message.data.instances 
           }));
         }
+        // 处理代理客户端相关事件
+        if (message.data.event === 'agent_connected' || message.data.event === 'agent_disconnected') {
+          // 可以在这里更新代理客户端列表
+        }
         break;
 
       case 'operation':

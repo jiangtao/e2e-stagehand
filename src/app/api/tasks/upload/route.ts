@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { taskDB } from '@/lib/db/database';
+import { getUserId, ensureUser, setUserIdCookie } from '@/lib/middleware/user-id';
 
 // 请求验证 schema
 const UploadRequestSchema = z.object({
@@ -12,14 +14,13 @@ const UploadRequestSchema = z.object({
   description: z.string().optional()
 });
 
-// 任务存储 (在实际应用中应该使用数据库)
-const tasks = new Map<string, any>();
-
 export async function POST(request: NextRequest) {
   try {
+    // 获取或创建用户 ID
+    const userId = getUserId(request);
+    ensureUser(userId);
+
     const body = await request.json();
-    
-    // 验证请求数据
     const { filename, content, instanceId, description } = UploadRequestSchema.parse(body);
 
     // 创建任务 ID
@@ -35,31 +36,32 @@ export async function POST(request: NextRequest) {
     const filePath = join(tasksDir, `${taskId}-${filename}`);
     await writeFile(filePath, content, 'utf8');
 
-    // 创建任务记录
-    const task = {
+    // 保存到数据库
+    taskDB.save({
       id: taskId,
+      userId,
+      instanceId,
       filename,
       filePath,
       content,
-      instanceId,
       description,
-      status: 'uploaded',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      status: 'uploaded'
+    });
 
-    // 存储任务
-    tasks.set(taskId, task);
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         taskId,
         filename,
         status: 'uploaded',
-        createdAt: task.createdAt
+        createdAt: new Date().toISOString()
       }
     });
+
+    // 设置用户 ID Cookie
+    response.headers.set('Set-Cookie', setUserIdCookie(userId));
+
+    return response;
 
   } catch (error) {
     console.error('❌ Upload task API error:', error);
@@ -79,24 +81,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const allTasks = Array.from(tasks.values()).map(task => ({
-      id: task.id,
-      filename: task.filename,
-      description: task.description,
-      status: task.status,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt
-    }));
+    // 获取用户 ID
+    const userId = getUserId(request);
+    ensureUser(userId);
 
-    return NextResponse.json({
+    // 从数据库获取用户的任务
+    const tasks = taskDB.findByUserId(userId);
+
+    const response = NextResponse.json({
       success: true,
       data: {
-        tasks: allTasks,
-        count: allTasks.length
+        tasks: tasks.map(task => ({
+          id: task.id,
+          filename: task.filename,
+          description: task.description,
+          status: task.status,
+          createdAt: task.createdAt.toISOString(),
+          updatedAt: task.updatedAt.toISOString()
+        })),
+        count: tasks.length
       }
     });
+
+    // 设置用户 ID Cookie
+    response.headers.set('Set-Cookie', setUserIdCookie(userId));
+
+    return response;
 
   } catch (error) {
     console.error('❌ List tasks API error:', error);
