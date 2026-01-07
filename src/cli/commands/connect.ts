@@ -4,11 +4,17 @@ import chalk from 'chalk';
 interface ConnectOptions {
   port: string;
   appPath?: string;
+  type?: string;
+  chromePath?: string;
+  incognito?: boolean;
 }
 
 export async function connectCommand(options: ConnectOptions) {
   try {
-    console.log(chalk.blue('🔌 Connecting to Electron instance...'));
+    const instanceType = (options.type || 'electron') as 'electron' | 'chrome';
+    const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+    
+    console.log(chalk.blue(`🔌 Connecting to ${instanceTypeLabel} instance...`));
     
     const port = parseInt(options.port);
     if (isNaN(port) || port < 1024 || port > 65535) {
@@ -16,9 +22,19 @@ export async function connectCommand(options: ConnectOptions) {
       process.exit(1);
     }
 
+    // 验证 Chrome 相关参数
+    if (instanceType === 'chrome' && !options.chromePath) {
+      console.error(chalk.red('❌ chromePath is required when instanceType is "chrome"'));
+      console.error(chalk.yellow('   Use --chrome-path <path> to specify Chrome executable path'));
+      process.exit(1);
+    }
+
     const response = await apiClient.post('/api/instances/connect', {
       port,
-      appPath: options.appPath
+      appPath: options.appPath,
+      instanceType,
+      chromePath: options.chromePath,
+      incognito: options.incognito || false
     });
 
     if (response.success) {
@@ -26,9 +42,13 @@ export async function connectCommand(options: ConnectOptions) {
       
       console.log(chalk.green('✅ Successfully connected!'));
       console.log(chalk.cyan(`Instance ID: ${instanceId}`));
+      console.log(chalk.gray(`Type: ${instance.instanceType || 'electron'}`));
       console.log(chalk.gray(`Port: ${instance.port}`));
       if (instance.appPath) {
         console.log(chalk.gray(`App Path: ${instance.appPath}`));
+      }
+      if (instance.incognito) {
+        console.log(chalk.gray(`Incognito: Yes`));
       }
       console.log(chalk.gray(`Connected at: ${new Date(instance.connectedAt).toLocaleString()}`));
       
@@ -41,7 +61,9 @@ export async function connectCommand(options: ConnectOptions) {
     }
 
   } catch (error) {
-    console.error(chalk.red('❌ Error connecting to Electron:'));
+    const instanceType = (options.type || 'electron') as 'electron' | 'chrome';
+    const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+    console.error(chalk.red(`❌ Error connecting to ${instanceTypeLabel}:`));
     console.error(chalk.red(error instanceof Error ? error.message : String(error)));
     process.exit(1);
   }

@@ -21,7 +21,10 @@ export default function InstanceManager({
     port: '9222',
     appPath: '',
     agentId: '',
-    connectionType: 'local' as 'local' | 'remote'
+    connectionType: 'local' as 'local' | 'remote',
+    instanceType: 'electron' as 'electron' | 'chrome',
+    chromePath: '',
+    incognito: false
   });
 
   const handleConnect = async () => {
@@ -37,7 +40,10 @@ export default function InstanceManager({
           port: parseInt(connectForm.port),
           appPath: connectForm.appPath || undefined,
           agentId: connectForm.agentId || undefined,
-          connectionType: connectForm.connectionType
+          connectionType: connectForm.connectionType,
+          instanceType: connectForm.instanceType,
+          chromePath: connectForm.instanceType === 'chrome' ? connectForm.chromePath : undefined,
+          incognito: connectForm.instanceType === 'chrome' ? connectForm.incognito : false
         }),
       });
 
@@ -45,7 +51,15 @@ export default function InstanceManager({
 
       if (result.success) {
         onRefresh();
-        setConnectForm({ port: '9222', appPath: '', agentId: '', connectionType: 'local' });
+        setConnectForm({ 
+          port: '9222', 
+          appPath: '', 
+          agentId: '', 
+          connectionType: 'local',
+          instanceType: 'electron',
+          chromePath: '',
+          incognito: false
+        });
         alert('✅ 连接成功！');
       } else {
         alert(`❌ 连接失败: ${result.error}`);
@@ -113,10 +127,57 @@ export default function InstanceManager({
       <div className="card p-6">
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <span className="mr-2">🔌</span>
-          连接 Electron 实例
+          连接实例
         </h2>
         
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              实例类型
+            </label>
+            <select
+              value={connectForm.instanceType}
+              onChange={(e) => setConnectForm({ ...connectForm, instanceType: e.target.value as 'electron' | 'chrome' })}
+              className="input-field"
+            >
+              <option value="electron">🟦 Electron</option>
+              <option value="chrome">🟨 Chrome</option>
+            </select>
+          </div>
+
+          {connectForm.instanceType === 'chrome' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Chrome 可执行文件路径 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={connectForm.chromePath}
+                  onChange={(e) => setConnectForm({ ...connectForm, chromePath: e.target.value })}
+                  className="input-field"
+                  placeholder="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Chrome 浏览器的完整路径（macOS/Windows/Linux）
+                </p>
+              </div>
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={connectForm.incognito}
+                    onChange={(e) => setConnectForm({ ...connectForm, incognito: e.target.checked })}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    隐私模式（无痕模式）
+                  </span>
+                </label>
+              </div>
+            </>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               连接类型
@@ -168,7 +229,7 @@ export default function InstanceManager({
               </div>
             )}
 
-            {connectForm.connectionType === 'local' && (
+            {connectForm.connectionType === 'local' && connectForm.instanceType === 'electron' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   应用路径 (可选)
@@ -190,11 +251,15 @@ export default function InstanceManager({
         
         <div className="mt-4 flex items-center justify-between">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            💡 确保 Electron 应用启动时添加了 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">--remote-debugging-port={connectForm.port}</code> 参数
+            {connectForm.instanceType === 'chrome' ? (
+              <>💡 系统将自动启动 Chrome 浏览器并连接到调试端口 {connectForm.port}</>
+            ) : (
+              <>💡 确保 Electron 应用启动时添加了 <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">--remote-debugging-port={connectForm.port}</code> 参数</>
+            )}
           </div>
           <button
             onClick={handleConnect}
-            disabled={isConnecting || !connectForm.port}
+            disabled={isConnecting || !connectForm.port || (connectForm.instanceType === 'chrome' && !connectForm.chromePath)}
             className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isConnecting ? '连接中...' : '连接'}
@@ -239,11 +304,19 @@ export default function InstanceManager({
                   <div className="flex items-center space-x-3">
                     <span className="text-2xl">{getStatusIcon(instance)}</span>
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-white">
-                        {instance.id}
+                      <div className="font-medium text-gray-900 dark:text-white flex items-center space-x-2">
+                        <span>
+                          {instance.instanceType === 'chrome' ? '🟨' : '🟦'}
+                        </span>
+                        <span>{instance.id}</span>
+                        {instance.incognito && (
+                          <span className="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                            隐私模式
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
-                        端口: {instance.port}
+                        {instance.instanceType === 'chrome' ? 'Chrome' : 'Electron'} • 端口: {instance.port}
                         {instance.appPath && (
                           <span className="ml-2">• {instance.appPath}</span>
                         )}

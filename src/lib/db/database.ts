@@ -99,11 +99,76 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
   `);
 
+  // 数据库迁移：添加新列（如果不存在）
+  try {
+    // 检查 instance_type 列是否存在
+    const columns = db.prepare("PRAGMA table_info(instances)").all() as any[];
+    const hasInstanceType = columns.some(col => col.name === 'instance_type');
+    const hasIncognito = columns.some(col => col.name === 'incognito');
+
+    if (!hasInstanceType) {
+      db.exec('ALTER TABLE instances ADD COLUMN instance_type TEXT DEFAULT \'electron\'');
+      console.log('✅ Added instance_type column to instances table');
+    }
+
+    if (!hasIncognito) {
+      db.exec('ALTER TABLE instances ADD COLUMN incognito INTEGER DEFAULT 0');
+      console.log('✅ Added incognito column to instances table');
+    }
+
+    // 更新现有记录的默认值
+    if (hasInstanceType || hasIncognito) {
+      db.exec(`
+        UPDATE instances 
+        SET instance_type = COALESCE(instance_type, 'electron'),
+            incognito = COALESCE(incognito, 0)
+        WHERE instance_type IS NULL OR incognito IS NULL
+      `);
+    }
+  } catch (error) {
+    console.warn('⚠️  Database migration warning:', error);
+  }
+
   console.log('✅ Database initialized');
 }
 
 // 初始化数据库
 initDatabase();
+
+/**
+ * 水果名称列表
+ */
+const FRUIT_NAMES = [
+  'apple', 'banana', 'orange', 'grape', 'strawberry',
+  'watermelon', 'pineapple', 'mango', 'kiwi', 'peach',
+  'cherry', 'blueberry', 'raspberry', 'blackberry', 'plum',
+  'apricot', 'pear', 'lemon', 'lime', 'coconut',
+  'papaya', 'dragonfruit', 'lychee', 'passionfruit', 'guava',
+  'pomegranate', 'fig', 'date', 'persimmon', 'cantaloupe'
+];
+
+/**
+ * 生成随机用户名（水果名称 + id 后缀）
+ */
+function generateRandomUsername(userId: string): string {
+  // 随机选择一个水果名称
+  const fruitName = FRUIT_NAMES[Math.floor(Math.random() * FRUIT_NAMES.length)];
+  
+  // 从 userId 中提取后缀
+  // userId 格式通常是: user-{timestamp}-{randomString}
+  // 我们提取最后的随机字符串部分，如果格式不同则取最后 6 位字符
+  let idSuffix: string;
+  const match = userId.match(/user-\d+-(.+)$/);
+  if (match && match[1]) {
+    // 提取随机字符串部分，取最后 6 位
+    idSuffix = match[1].slice(-6);
+  } else {
+    // 如果格式不匹配，直接取最后 6 位字符
+    idSuffix = userId.slice(-6);
+  }
+  
+  return `${fruitName}-${idSuffix}`;
+}
 
 /**
  * 获取或创建用户
@@ -113,7 +178,20 @@ export function getOrCreateUser(userId: string): { id: string; username?: string
   
   if (existing) {
     // 更新最后访问时间
-    db.prepare('UPDATE users SET last_seen_at = datetime("now") WHERE id = ?').run(userId);
+    db.prepare('UPDATE users SET last_seen_at = datetime(\'now\') WHERE id = ?').run(userId);
+    
+    // 如果用户没有 username，自动生成一个
+    if (!existing.username) {
+      const generatedUsername = generateRandomUsername(userId);
+      db.prepare('UPDATE users SET username = ? WHERE id = ?').run(generatedUsername, userId);
+      return {
+        id: existing.id,
+        username: generatedUsername,
+        createdAt: existing.created_at,
+        lastSeenAt: existing.last_seen_at
+      };
+    }
+    
     return {
       id: existing.id,
       username: existing.username || undefined,
@@ -122,12 +200,19 @@ export function getOrCreateUser(userId: string): { id: string; username?: string
     };
   }
   
-  // 创建新用户
+  // 创建新用户，自动生成 username
   const now = new Date().toISOString();
-  db.prepare('INSERT INTO users (id, created_at, last_seen_at) VALUES (?, ?, ?)').run(userId, now, now);
+  const generatedUsername = generateRandomUsername(userId);
+  db.prepare('INSERT INTO users (id, username, created_at, last_seen_at) VALUES (?, ?, ?, ?)').run(
+    userId,
+    generatedUsername,
+    now,
+    now
+  );
   
   return {
     id: userId,
+    username: generatedUsername,
     createdAt: now,
     lastSeenAt: now
   };
@@ -138,9 +223,11 @@ export function getOrCreateUser(userId: string): { id: string; username?: string
  */
 export function updateUser(userId: string, username?: string): void {
   if (username !== undefined) {
-    db.prepare('UPDATE users SET username = ?, last_seen_at = datetime("now") WHERE id = ?').run(username || null, userId);
+    // 如果 username 为空字符串或 null，自动生成一个随机用户名
+    const finalUsername = username && username.trim() ? username.trim() : generateRandomUsername(userId);
+    db.prepare('UPDATE users SET username = ?, last_seen_at = datetime(\'now\') WHERE id = ?').run(finalUsername, userId);
   } else {
-    db.prepare('UPDATE users SET last_seen_at = datetime("now") WHERE id = ?').run(userId);
+    db.prepare('UPDATE users SET last_seen_at = datetime(\'now\') WHERE id = ?').run(userId);
   }
 }
 
@@ -154,8 +241,8 @@ export const instanceDB = {
   save(instance: ElectronInstance & { userId: string }): void {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO instances 
-      (id, user_id, port, app_path, pid, status, connected_at, last_activity, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      (id, user_id, port, app_path, pid, status, connected_at, last_activity, instance_type, incognito, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     `);
     
     stmt.run(
@@ -166,7 +253,9 @@ export const instanceDB = {
       instance.pid || null,
       instance.status,
       instance.connectedAt.toISOString(),
-      instance.lastActivity.toISOString()
+      instance.lastActivity.toISOString(),
+      instance.instanceType || 'electron',
+      instance.incognito ? 1 : 0
     );
   },
 
@@ -186,6 +275,8 @@ export const instanceDB = {
       status: row.status as ElectronInstance['status'],
       connectedAt: new Date(row.connected_at),
       lastActivity: new Date(row.last_activity),
+      instanceType: (row.instance_type as 'electron' | 'chrome') || 'electron',
+      incognito: row.incognito === 1,
       agentId: row.agent_id || undefined,
       connectionType: (row.connection_type as 'local' | 'remote') || 'local'
     };
@@ -214,6 +305,8 @@ export const instanceDB = {
       status: row.status as ElectronInstance['status'],
       connectedAt: new Date(row.connected_at),
       lastActivity: new Date(row.last_activity),
+      instanceType: (row.instance_type as 'electron' | 'chrome') || 'electron',
+      incognito: row.incognito === 1,
       agentId: row.agent_id || undefined,
       connectionType: (row.connection_type as 'local' | 'remote') || 'local'
     };
@@ -234,6 +327,8 @@ export const instanceDB = {
       status: row.status as ElectronInstance['status'],
       connectedAt: new Date(row.connected_at),
       lastActivity: new Date(row.last_activity),
+      instanceType: (row.instance_type as 'electron' | 'chrome') || 'electron',
+      incognito: row.incognito === 1,
       agentId: row.agent_id || undefined,
       connectionType: (row.connection_type as 'local' | 'remote') || 'local'
     }));
@@ -243,14 +338,14 @@ export const instanceDB = {
    * 更新实例状态
    */
   updateStatus(instanceId: string, status: ElectronInstance['status']): void {
-    db.prepare('UPDATE instances SET status = ?, updated_at = datetime("now") WHERE id = ?').run(status, instanceId);
+    db.prepare('UPDATE instances SET status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(status, instanceId);
   },
 
   /**
    * 更新最后活动时间
    */
   updateLastActivity(instanceId: string): void {
-    db.prepare('UPDATE instances SET last_activity = datetime("now"), updated_at = datetime("now") WHERE id = ?').run(instanceId);
+    db.prepare('UPDATE instances SET last_activity = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?').run(instanceId);
   },
 
   /**
@@ -267,9 +362,9 @@ export const instanceDB = {
     let rows: any[];
     
     if (userId) {
-      rows = db.prepare('SELECT * FROM instances WHERE status = "connected" AND user_id = ?').all(userId) as any[];
+      rows = db.prepare('SELECT * FROM instances WHERE status = \'connected\' AND user_id = ?').all(userId) as any[];
     } else {
-      rows = db.prepare('SELECT * FROM instances WHERE status = "connected"').all() as any[];
+      rows = db.prepare('SELECT * FROM instances WHERE status = \'connected\'').all() as any[];
     }
     
     return rows.map(row => ({
@@ -281,6 +376,8 @@ export const instanceDB = {
       status: row.status as ElectronInstance['status'],
       connectedAt: new Date(row.connected_at),
       lastActivity: new Date(row.last_activity),
+      instanceType: (row.instance_type as 'electron' | 'chrome') || 'electron',
+      incognito: row.incognito === 1,
       agentId: row.agent_id || undefined,
       connectionType: (row.connection_type as 'local' | 'remote') || 'local'
     }));
@@ -502,14 +599,14 @@ export const agentDB = {
    * 更新代理客户端状态
    */
   updateStatus(agentId: string, status: 'connected' | 'disconnected' | 'error'): void {
-    db.prepare('UPDATE agents SET status = ?, updated_at = datetime("now") WHERE id = ?').run(status, agentId);
+    db.prepare('UPDATE agents SET status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(status, agentId);
   },
 
   /**
    * 更新心跳时间
    */
   updateHeartbeat(agentId: string): void {
-    db.prepare('UPDATE agents SET last_heartbeat = datetime("now"), updated_at = datetime("now") WHERE id = ?').run(agentId);
+    db.prepare('UPDATE agents SET last_heartbeat = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?').run(agentId);
   },
 
   /**

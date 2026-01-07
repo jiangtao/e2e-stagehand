@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { taskDB } from '@/lib/db/database';
 import { getUserId, ensureUser, setUserIdCookie } from '@/lib/middleware/user-id';
 
+// 标记为动态路由
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

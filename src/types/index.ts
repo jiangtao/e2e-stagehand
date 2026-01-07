@@ -8,6 +8,10 @@ export interface ElectronInstance {
   status: 'connected' | 'disconnected' | 'error';
   connectedAt: Date;
   lastActivity: Date;
+  // 实例类型
+  instanceType?: 'electron' | 'chrome';
+  // Chrome 隐私模式
+  incognito?: boolean;
   // 代理相关字段
   agentId?: string;
   connectionType?: 'local' | 'remote';

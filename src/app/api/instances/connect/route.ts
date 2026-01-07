@@ -3,12 +3,18 @@ import { z } from 'zod';
 import { electronConnector } from '@/lib/cdp/electron-connector';
 import { getUserId, ensureUser, setUserIdCookie } from '@/lib/middleware/user-id';
 
+// 标记为动态路由
+export const dynamic = 'force-dynamic';
+
 // 请求验证 schema
 const ConnectRequestSchema = z.object({
   port: z.number().min(1024).max(65535),
   appPath: z.string().optional(),
   agentId: z.string().optional(),
-  connectionType: z.enum(['local', 'remote']).optional().default('local')
+  connectionType: z.enum(['local', 'remote']).optional().default('local'),
+  instanceType: z.enum(['electron', 'chrome']).optional().default('electron'),
+  chromePath: z.string().optional(),
+  incognito: z.boolean().optional().default(false)
 });
 
 export async function POST(request: NextRequest) {
@@ -18,10 +24,27 @@ export async function POST(request: NextRequest) {
     ensureUser(userId);
 
     const body = await request.json();
-    const { port, appPath, agentId, connectionType } = ConnectRequestSchema.parse(body);
+    const { port, appPath, agentId, connectionType, instanceType, chromePath, incognito } = ConnectRequestSchema.parse(body);
 
-    // 连接到 Electron 实例（传入 userId, agentId, connectionType）
-    const instanceId = await electronConnector.connect(port, appPath, userId, agentId, connectionType);
+    // 验证 Chrome 相关参数
+    if (instanceType === 'chrome' && !chromePath) {
+      return NextResponse.json({
+        success: false,
+        error: 'chromePath is required when instanceType is "chrome"'
+      }, { status: 400 });
+    }
+
+    // 连接到实例（传入所有参数）
+    const instanceId = await electronConnector.connect(
+      port,
+      appPath,
+      userId,
+      agentId,
+      connectionType,
+      instanceType,
+      chromePath,
+      incognito
+    );
 
     const response = NextResponse.json({
       success: true,

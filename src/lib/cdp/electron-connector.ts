@@ -3,12 +3,14 @@ import { EventEmitter } from 'events';
 import { ElectronInstance, CDPCommand, CDPResponse, OperationEvent } from '@/types';
 import { instanceDB } from '@/lib/db/database';
 import { agentManager } from '@/lib/agent/agent-manager';
+import { launchChrome, waitForPort, ChromeProcess } from '@/lib/cdp/chrome-launcher';
 
 export class ElectronConnector extends EventEmitter {
   private instances: Map<string, {
     instance: ElectronInstance;
     client: any;
     isHealthy: boolean;
+    chromeProcess?: ChromeProcess;
   }> = new Map();
 
   private healthCheckInterval: NodeJS.Timeout | null = null;
@@ -19,15 +21,55 @@ export class ElectronConnector extends EventEmitter {
   }
 
   /**
-   * 连接到 Electron 实例
+   * 连接到 Electron 或 Chrome 实例
    */
-  async connect(port: number, appPath?: string, userId?: string, agentId?: string, connectionType: 'local' | 'remote' = 'local'): Promise<string> {
+  async connect(
+    port: number,
+    appPath?: string,
+    userId?: string,
+    agentId?: string,
+    connectionType: 'local' | 'remote' = 'local',
+    instanceType: 'electron' | 'chrome' = 'electron',
+    chromePath?: string,
+    incognito: boolean = false
+  ): Promise<string> {
     try {
+      // 0. 如果是 Chrome 且提供了 chromePath，先启动 Chrome
+      let chromeProcess: ChromeProcess | undefined;
+      if (instanceType === 'chrome' && chromePath) {
+        console.log(`🚀 Launching Chrome browser...`);
+        chromeProcess = launchChrome({
+          chromePath,
+          port,
+          incognito
+        });
+
+        // 等待 Chrome 启动完成（最多等待 10 秒）
+        console.log(`⏳ Waiting for Chrome to start on port ${port}...`);
+        const portReady = await waitForPort(port, 10000);
+        if (!portReady) {
+          if (chromeProcess) {
+            // 如果启动失败，尝试终止进程
+            try {
+              chromeProcess.process.kill();
+            } catch (e) {
+              // 忽略错误
+            }
+          }
+          throw new Error(`Chrome failed to start on port ${port} within 10 seconds`);
+        }
+        console.log(`✅ Chrome is ready on port ${port}`);
+      }
+
       // 1. 检查内存中是否已连接
       const existingInMemory = Array.from(this.instances.values())
         .find(item => item.instance.port === port);
       
       if (existingInMemory) {
+        if (chromeProcess) {
+          // 如果已经连接，终止刚启动的 Chrome
+          chromeProcess.process.kill();
+        }
         throw new Error(`Port ${port} is already connected (Instance ID: ${existingInMemory.instance.id})`);
       }
 
@@ -45,12 +87,14 @@ export class ElectronConnector extends EventEmitter {
               ...existingInDB,
               status: 'connected',
               lastActivity: new Date(),
-              connectionType: existingInDB.connectionType || 'local'
+              connectionType: existingInDB.connectionType || 'local',
+              instanceType: existingInDB.instanceType || 'electron',
+              incognito: existingInDB.incognito || false
             };
 
             // 如果是远程连接，通过代理重连
             if (instance.connectionType === 'remote' && instance.agentId) {
-              return await this.connectViaAgent(existingInDB.id, port, existingInDB.appPath, userId, instance.agentId);
+              return await this.connectViaAgent(existingInDB.id, port, existingInDB.appPath, userId, instance.agentId, instanceType, incognito);
             }
 
             // 本地直连
@@ -65,30 +109,36 @@ export class ElectronConnector extends EventEmitter {
             this.instances.set(existingInDB.id, {
               instance,
               client,
-              isHealthy: true
+              isHealthy: true,
+              chromeProcess: chromeProcess
             });
 
             // 更新数据库
             instanceDB.save({ ...instance, userId });
 
             this.emit('connected', instance);
-            console.log(`✅ Reconnected to Electron instance on port ${port}, ID: ${existingInDB.id}`);
+            const instanceTypeLabel = instance.instanceType === 'chrome' ? 'Chrome' : 'Electron';
+            console.log(`✅ Reconnected to ${instanceTypeLabel} instance on port ${port}, ID: ${existingInDB.id}`);
             return existingInDB.id;
           } catch (reconnectError) {
+            if (chromeProcess) {
+              chromeProcess.process.kill();
+            }
             existingInDB.status = 'disconnected';
             instanceDB.save({ ...existingInDB, userId });
-            throw new Error(`Port ${port} was previously connected but is now unavailable. Please ensure the Electron app is running with --remote-debugging-port=${port}`);
+            const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+            throw new Error(`Port ${port} was previously connected but is now unavailable. Please ensure the ${instanceTypeLabel} app is running with --remote-debugging-port=${port}`);
           }
         }
       }
 
       // 3. 新连接
-      const instanceId = `electron-${port}-${Date.now()}`;
+      const instanceId = `${instanceType}-${port}-${Date.now()}`;
       
       // 根据连接类型选择连接方式
       if (connectionType === 'remote' && agentId) {
         // 通过代理客户端连接
-        return await this.connectViaAgent(instanceId, port, appPath, userId, agentId);
+        return await this.connectViaAgent(instanceId, port, appPath, userId, agentId, instanceType, incognito);
       } else {
         // 本地直连
         const client = await CDP({ port });
@@ -100,7 +150,10 @@ export class ElectronConnector extends EventEmitter {
           status: 'connected',
           connectedAt: new Date(),
           lastActivity: new Date(),
-          connectionType: 'local'
+          instanceType,
+          incognito: instanceType === 'chrome' ? incognito : undefined,
+          connectionType: 'local',
+          pid: chromeProcess?.pid
         };
 
         await Promise.all([
@@ -114,7 +167,8 @@ export class ElectronConnector extends EventEmitter {
         this.instances.set(instanceId, {
           instance,
           client,
-          isHealthy: true
+          isHealthy: true,
+          chromeProcess: chromeProcess
         });
 
         // 保存到数据库（如果提供了 userId）
@@ -123,13 +177,16 @@ export class ElectronConnector extends EventEmitter {
         }
 
         this.emit('connected', instance);
-        console.log(`✅ Connected to Electron instance on port ${port}, ID: ${instanceId}`);
+        const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+        const incognitoLabel = incognito ? ' (Incognito)' : '';
+        console.log(`✅ Connected to ${instanceTypeLabel} instance on port ${port}${incognitoLabel}, ID: ${instanceId}`);
         return instanceId;
       }
 
     } catch (error) {
-      console.error(`❌ Failed to connect to Electron on port ${port}:`, error);
-      throw new Error(`Failed to connect to Electron on port ${port}: ${error}`);
+      const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+      console.error(`❌ Failed to connect to ${instanceTypeLabel} on port ${port}:`, error);
+      throw new Error(`Failed to connect to ${instanceTypeLabel} on port ${port}: ${error}`);
     }
   }
 
@@ -176,7 +233,7 @@ export class ElectronConnector extends EventEmitter {
   /**
    * 断开连接
    */
-  async disconnect(instanceId: string): Promise<void> {
+  async disconnect(instanceId: string, killChrome: boolean = false): Promise<void> {
     const connection = this.instances.get(instanceId);
     if (!connection) {
       throw new Error(`Instance ${instanceId} not found`);
@@ -189,6 +246,20 @@ export class ElectronConnector extends EventEmitter {
       } else if (connection.client) {
         // 本地直连，关闭客户端
         await connection.client.close();
+      }
+
+      // 如果是 Chrome 且是系统启动的，可以选择关闭 Chrome 进程
+      if (connection.instance.instanceType === 'chrome' && connection.chromeProcess && killChrome) {
+        console.log(`🛑 Terminating Chrome process (PID: ${connection.chromeProcess.pid})...`);
+        connection.chromeProcess.process.kill('SIGTERM');
+        
+        // 如果进程在 3 秒内没有退出，强制终止
+        setTimeout(() => {
+          if (connection.chromeProcess && !connection.chromeProcess.process.killed) {
+            console.log(`⚠️  Force killing Chrome process (PID: ${connection.chromeProcess.pid})...`);
+            connection.chromeProcess.process.kill('SIGKILL');
+          }
+        }, 3000);
       }
 
       connection.instance.status = 'disconnected';
@@ -214,7 +285,15 @@ export class ElectronConnector extends EventEmitter {
   /**
    * 通过代理客户端连接
    */
-  private async connectViaAgent(instanceId: string, port: number, appPath: string | undefined, userId: string | undefined, agentId: string): Promise<string> {
+  private async connectViaAgent(
+    instanceId: string,
+    port: number,
+    appPath: string | undefined,
+    userId: string | undefined,
+    agentId: string,
+    instanceType: 'electron' | 'chrome' = 'electron',
+    incognito: boolean = false
+  ): Promise<string> {
     // 检查代理客户端是否存在
     const agent = agentManager.getAgent(agentId);
     if (!agent) {
@@ -229,6 +308,8 @@ export class ElectronConnector extends EventEmitter {
       status: 'connected',
       connectedAt: new Date(),
       lastActivity: new Date(),
+      instanceType,
+      incognito: instanceType === 'chrome' ? incognito : undefined,
       connectionType: 'remote',
       agentId
     };
@@ -253,7 +334,8 @@ export class ElectronConnector extends EventEmitter {
     }
 
     this.emit('connected', instance);
-    console.log(`✅ Connected to Electron instance via agent ${agentId} on port ${port}, ID: ${instanceId}`);
+    const instanceTypeLabel = instanceType === 'chrome' ? 'Chrome' : 'Electron';
+    console.log(`✅ Connected to ${instanceTypeLabel} instance via agent ${agentId} on port ${port}, ID: ${instanceId}`);
     return instanceId;
   }
 

@@ -10,17 +10,21 @@ export async function GET(request: NextRequest) {
     const userInfo = getUserInfo(request);
     const user = getOrCreateUser(userInfo.userId);
 
+    // 优先使用 cookie 中的 username，其次使用数据库中的 username（可能是自动生成的）
+    const username = userInfo.username || user.username;
+
     const response = NextResponse.json({
       success: true,
       data: {
         userId: userInfo.userId,
-        username: userInfo.username || user.username || undefined
+        username: username || undefined
       }
     });
 
     response.headers.set('Set-Cookie', setUserIdCookie(userInfo.userId));
-    if (userInfo.username) {
-      response.headers.append('Set-Cookie', setUsernameCookie(userInfo.username));
+    // 如果有 username（包括自动生成的），都保存到 Cookie
+    if (username) {
+      response.headers.append('Set-Cookie', setUsernameCookie(username));
     }
 
     return response;

@@ -19,9 +19,12 @@ program
 // 连接命令
 program
   .command('connect')
-  .description('Connect to an Electron instance')
+  .description('Connect to an Electron or Chrome instance')
   .option('-p, --port <number>', 'CDP debug port', '9222')
   .option('-a, --app-path <path>', 'Path to Electron application')
+  .option('-t, --type <type>', 'Instance type (electron or chrome)', 'electron')
+  .option('-c, --chrome-path <path>', 'Path to Chrome executable (required for Chrome)')
+  .option('--incognito', 'Launch Chrome in incognito mode')
   .action(connectCommand);
 
 // 列出实例命令
