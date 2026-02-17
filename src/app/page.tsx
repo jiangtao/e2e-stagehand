@@ -7,8 +7,8 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // 重定向到实例管理页面
-    router.replace('/instances');
+    // 重定向到目标选择页面
+    router.replace('/targets');
   }, [router]);
 
   return (

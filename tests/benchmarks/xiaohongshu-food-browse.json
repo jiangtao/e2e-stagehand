@@ -1,0 +1,185 @@
+{
+  "name": "小红书美食浏览基准测试",
+  "description": "模拟真实用户在小红书搜索并浏览北京春节美食的完整流程",
+  "version": "1.0.0",
+  "target": {
+    "id": "xiaohongshu-web",
+    "type": "web-url",
+    "url": "https://www.xiaohongshu.com",
+    "name": "小红书网页版"
+  },
+  "steps": [
+    {
+      "id": "step-1",
+      "name": "打开小红书",
+      "type": "navigate",
+      "action": "打开网页 https://www.xiaohongshu.com",
+      "waitFor": "page_load",
+      "timeout": 10000
+    },
+    {
+      "id": "step-2",
+      "name": "等待用户登录",
+      "type": "wait_for_login",
+      "action": "检查用户登录状态，如果未登录则等待用户手动登录",
+      "maxWaitTime": 300000,
+      "checkInterval": 3000,
+      "loginIndicators": [
+        {
+          "type": "element_absent",
+          "selector": "[class*='login'], [class*='sign'], button:has-text('登录')",
+          "description": "登录按钮不存在"
+        },
+        {
+          "type": "element_present",
+          "selector": "[class*='avatar'], [class*='user'], img[src*='avatar']",
+          "description": "用户头像存在"
+        }
+      ]
+    },
+    {
+      "id": "step-3",
+      "name": "搜索北京春节美食",
+      "type": "search",
+      "action": "在搜索框中输入'北京春节美食'并点击搜索",
+      "searchQuery": "北京春节美食",
+      "searchBoxSelector": "input[placeholder*='搜索'], input[type='search']",
+      "submitSelector": "button:has-text('搜索'), [role='button']:has-text('搜索')",
+      "waitFor": "search_results",
+      "timeout": 10000
+    },
+    {
+      "id": "step-4",
+      "name": "找到点赞最多的美食排行榜",
+      "type": "find_top_items",
+      "action": "按点赞数排序，找到前10个美食帖子",
+      "sortOrder": "likes_desc",
+      "maxItems": 10,
+      "itemSelector": "[class*='note'], [class*='card'], article",
+      "likeSelector": "[class*='like'], [class*='heart'], span:has-text('赞')",
+      "waitBetweenBrowsing": "random:3000,8000"
+    },
+    {
+      "id": "step-5",
+      "name": "浏览美食帖子",
+      "type": "browse_items",
+      "action": "逐个浏览前10个美食帖子，模拟正常人的浏览速率",
+      "items": [
+        {
+          "index": 1,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 2,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 3,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 4,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 5,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 6,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 7,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 8,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 9,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        },
+        {
+          "index": 10,
+          "actions": [
+            { "type": "click", "wait": "random:2000,5000" },
+            { "type": "scroll", "direction": "down", "amount": "random:200,500", "wait": "random:1000,3000" },
+            { "type": "check_video", "description": "检查视频流 canvas 展示" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "step-6",
+      "name": "验证视频流 canvas 展示",
+      "type": "verify_canvas",
+      "action": "确保浏览过程中的视频内容在 canvas 中正确展示",
+      "checks": [
+        {
+          "type": "canvas_exists",
+          "selector": "canvas, video",
+          "description": "Canvas 或 video 元素存在"
+        },
+        {
+          "type": "canvas_playing",
+          "description": "视频正在播放中"
+        },
+        {
+          "type": "no_errors",
+          "description": "控制台无视频相关错误"
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "totalDuration": "estimated:5-15 minutes",
+    "browsingBehavior": "模拟真实人类浏览速率（每次操作间隔2-8秒）",
+    "videoDisplay": "所有视频内容应在 canvas 中正常展示",
+    "loginState": "需要用户已登录或等待用户登录"
+  },
+  "metadata": {
+    "created_at": "2025-02-15",
+    "tags": ["xiaohongshu", "food", "browse", "video", "benchmark"],
+    "difficulty": "intermediate",
+    "requires_login": true,
+    "target_platform": "web"
+  }
+}

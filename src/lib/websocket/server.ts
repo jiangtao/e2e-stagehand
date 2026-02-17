@@ -8,6 +8,7 @@ import { getUserId } from '@/lib/middleware/user-id';
 export class StagehandWebSocketServer {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
+  private serverPort: number | null = null;
 
   constructor() {
     this.setupEventListeners();
@@ -17,7 +18,15 @@ export class StagehandWebSocketServer {
    * 启动 WebSocket 服务器
    */
   start(port: number = 8080): void {
+    // 如果已经在这个端口运行，不重复启动
+    if (this.serverPort === port && this.wss) {
+      console.log('[WS Server] Already running on port', port);
+      return;
+    }
+
     this.wss = new WebSocketServer({ port });
+    this.serverPort = port;
+    console.log(`[WS Server] Started on port ${port}`);
 
     this.wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
       const remoteAddress = request.socket.remoteAddress;
@@ -82,6 +91,7 @@ export class StagehandWebSocketServer {
       this.wss.close();
       this.wss = null;
     }
+    this.serverPort = null;
     this.clients.clear();
     console.log('🛑 WebSocket server stopped');
   }
@@ -351,6 +361,20 @@ export class StagehandWebSocketServer {
    */
   getClientCount(): number {
     return this.clients.size;
+  }
+
+  /**
+   * 检查服务器是否正在运行
+   */
+  isRunning(): boolean {
+    return this.wss !== null && this.serverPort !== null;
+  }
+
+  /**
+   * 获取当前监听的端口
+   */
+  getPort(): number | null {
+    return this.serverPort;
   }
 }
 
